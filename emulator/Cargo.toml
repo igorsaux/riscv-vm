@@ -4,4 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+vm = { package = "vm", path = "../vm" }
+anyhow = "1.0.86"
 clap = { version = "4.5.4", features = ["derive"] }
+object = { version = "0.35.0", features = [
+	"elf",
+	"std",
+	"read_core",
+], default-features = false }

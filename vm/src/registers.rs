@@ -92,7 +92,6 @@ pub struct Registers {
 }
 
 impl Registers {
-    #[crate::prof::instrument("Registers::get", skip_all)]
     pub fn get(&self, register: Register) -> i32 {
         let i = register.as_u8() as usize;
 
@@ -103,7 +102,6 @@ impl Registers {
         }
     }
 
-    #[crate::prof::instrument("Registers::set", skip_all)]
     pub fn set(&mut self, register: Register, value: i32) {
         let i = register.as_u8() as usize;
 
@@ -114,12 +112,10 @@ impl Registers {
         unsafe { *self.registers.get_unchecked_mut(i - 1) = value };
     }
 
-    #[crate::prof::instrument("Registers::pc", skip_all)]
     pub fn pc(&self) -> u32 {
         self.pc
     }
 
-    #[crate::prof::instrument("Registers::pc_mut", skip_all)]
     pub fn pc_mut(&mut self) -> &mut u32 {
         &mut self.pc
     }

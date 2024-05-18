@@ -1,2 +1,5 @@
 [workspace]
 members = ["emulator", "vm"]
+
+[profile.release]
+lto = true

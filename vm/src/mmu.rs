@@ -31,7 +31,6 @@ pub struct MMU {
 }
 
 impl MMU {
-    #[crate::prof::instrument("MMU::new", skip_all)]
     pub fn new(ram_config: RAMConfig) -> Result<Self, MMUError> {
         check_align::<i32>(ram_config.start_address)?;
 
@@ -40,22 +39,18 @@ impl MMU {
         Ok(Self { ram })
     }
 
-    #[crate::prof::instrument("MMU::ram_start", skip_all)]
     pub fn ram_start(&self) -> u32 {
         self.ram.0
     }
 
-    #[crate::prof::instrument("MMU::ram", skip_all)]
     pub fn ram(&self) -> &RAM {
         &self.ram.1
     }
 
-    #[crate::prof::instrument("MMU::ram_mut", skip_all)]
     pub fn ram_mut(&mut self) -> &mut RAM {
         &mut self.ram.1
     }
 
-    #[crate::prof::instrument("MMU::read_i8", skip_all)]
     pub fn read_i8(&self, address: u32) -> Result<i8, MMUError> {
         if address >= self.ram.0 {
             let translated = address - self.ram.0;
@@ -67,7 +62,6 @@ impl MMU {
         }
     }
 
-    #[crate::prof::instrument("MMU::read_i16", skip_all)]
     pub fn read_i16(&self, address: u32) -> Result<i16, MMUError> {
         check_align::<i16>(address)?;
 
@@ -81,7 +75,6 @@ impl MMU {
         }
     }
 
-    #[crate::prof::instrument("MMU::read_i32", skip_all)]
     pub fn read_i32(&self, address: u32) -> Result<i32, MMUError> {
         check_align::<i32>(address)?;
 
@@ -95,7 +88,6 @@ impl MMU {
         }
     }
 
-    #[crate::prof::instrument("MMU::write_i8", skip_all)]
     pub fn write_i8(&mut self, value: i8, address: u32) -> Result<(), MMUError> {
         if address >= self.ram.0 {
             let translated = address - self.ram.0;
@@ -108,7 +100,6 @@ impl MMU {
         }
     }
 
-    #[crate::prof::instrument("MMU::write_i16", skip_all)]
     pub fn write_i16(&mut self, value: i16, address: u32) -> Result<(), MMUError> {
         check_align::<i16>(address)?;
 
@@ -123,7 +114,6 @@ impl MMU {
         }
     }
 
-    #[crate::prof::instrument("MMU::write_i32", skip_all)]
     pub fn write_i32(&mut self, value: i32, address: u32) -> Result<(), MMUError> {
         check_align::<i16>(address)?;
 

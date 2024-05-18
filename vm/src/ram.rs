@@ -4,7 +4,7 @@ use thiserror::Error;
 pub enum RAMError {
     #[error("Memory size should be power of two, but it is {size}")]
     InvalidSize { size: u32 },
-    #[error("Uut of bounds")]
+    #[error("Out of bounds")]
     OutOfBounds,
 }
 
@@ -25,7 +25,6 @@ pub struct RAM {
 }
 
 impl RAM {
-    #[crate::prof::instrument("RAM::new", skip_all)]
     pub fn new(size: u32) -> Result<Self, RAMError> {
         if size % 2 != 0 {
             return Err(RAMError::InvalidSize { size });
@@ -36,17 +35,14 @@ impl RAM {
         Ok(Self { memory })
     }
 
-    #[crate::prof::instrument("RAM::as_slice", skip_all)]
     pub fn as_slice(&self) -> &[u8] {
         self.memory.as_slice()
     }
 
-    #[crate::prof::instrument("RAM::as_mut_slice", skip_all)]
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         self.memory.as_mut_slice()
     }
 
-    #[crate::prof::instrument("RAM::write_i8", skip_all)]
     pub fn write_i8(&mut self, value: i8, address: u32) -> Result<(), RAMError> {
         check_bounds::<i8>(address, self.memory.as_slice())?;
 
@@ -58,7 +54,6 @@ impl RAM {
         Ok(())
     }
 
-    #[crate::prof::instrument("RAM::write_i16", skip_all)]
     pub fn write_i16(&mut self, value: i16, address: u32) -> Result<(), RAMError> {
         check_bounds::<i16>(address, self.memory.as_slice())?;
 
@@ -70,7 +65,6 @@ impl RAM {
         Ok(())
     }
 
-    #[crate::prof::instrument("RAM::write_i32", skip_all)]
     pub fn write_i32(&mut self, value: i32, address: u32) -> Result<(), RAMError> {
         check_bounds::<i32>(address, self.memory.as_slice())?;
 
@@ -82,7 +76,6 @@ impl RAM {
         Ok(())
     }
 
-    #[crate::prof::instrument("RAM::read_i8", skip_all)]
     pub fn read_i8(&self, address: u32) -> Result<i8, RAMError> {
         check_bounds::<i8>(address, self.memory.as_slice())?;
 
@@ -93,7 +86,6 @@ impl RAM {
         Ok(value)
     }
 
-    #[crate::prof::instrument("RAM::read_i16", skip_all)]
     pub fn read_i16(&self, address: u32) -> Result<i16, RAMError> {
         check_bounds::<i16>(address, self.memory.as_slice())?;
 
@@ -104,7 +96,6 @@ impl RAM {
         Ok(value)
     }
 
-    #[crate::prof::instrument("RAM::read_i32", skip_all)]
     pub fn read_i32(&self, address: u32) -> Result<i32, RAMError> {
         check_bounds::<i32>(address, self.memory.as_slice())?;
 

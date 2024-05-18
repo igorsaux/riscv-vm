@@ -93,7 +93,6 @@ const fn fetch_imm_j(instruction: i32) -> i32 {
     result
 }
 
-#[crate::prof::instrument("ifu::fetch_instruction_r", skip_all)]
 fn fetch_instruction_r(instruction: i32) -> Result<InstructionR, IFUError> {
     let rd = fetch_rd(instruction).ok_or(IFUError::InvalidRegister {
         index: 1,
@@ -111,7 +110,6 @@ fn fetch_instruction_r(instruction: i32) -> Result<InstructionR, IFUError> {
     Ok(InstructionR::new(rd, rs1, rs2))
 }
 
-#[crate::prof::instrument("ifu::fetch_instruction_i", skip_all)]
 fn fetch_instruction_i(instruction: i32) -> Result<InstructionI, IFUError> {
     let rd = fetch_rd(instruction).ok_or(IFUError::InvalidRegister {
         index: 1,
@@ -126,7 +124,6 @@ fn fetch_instruction_i(instruction: i32) -> Result<InstructionI, IFUError> {
     Ok(InstructionI::new(rd, rs1, imm))
 }
 
-#[crate::prof::instrument("ifu::fetch_instruction_i_alt", skip_all)]
 fn fetch_instruction_i_alt(instruction: i32) -> Result<InstructionIAlt, IFUError> {
     let rd = fetch_rd(instruction).ok_or(IFUError::InvalidRegister {
         index: 1,
@@ -142,7 +139,6 @@ fn fetch_instruction_i_alt(instruction: i32) -> Result<InstructionIAlt, IFUError
     Ok(InstructionIAlt::new(rd, rs1, shamt))
 }
 
-#[crate::prof::instrument("ifu::fetch_instruction_s", skip_all)]
 fn fetch_instruction_s(instruction: i32) -> Result<InstructionS, IFUError> {
     let rs1 = fetch_rs1(instruction).ok_or(IFUError::InvalidRegister {
         index: 1,
@@ -157,7 +153,6 @@ fn fetch_instruction_s(instruction: i32) -> Result<InstructionS, IFUError> {
     Ok(InstructionS::new(rs1, rs2, imm))
 }
 
-#[crate::prof::instrument("ifu::fetch_instruction_u", skip_all)]
 fn fetch_instruction_b(instruction: i32) -> Result<InstructionB, IFUError> {
     let rs1 = fetch_rs1(instruction).ok_or(IFUError::InvalidRegister {
         index: 1,
@@ -172,7 +167,6 @@ fn fetch_instruction_b(instruction: i32) -> Result<InstructionB, IFUError> {
     Ok(InstructionB::new(rs1, rs2, imm))
 }
 
-#[crate::prof::instrument("ifu::fetch_instruction_u", skip_all)]
 fn fetch_instruction_u(instruction: i32) -> Result<InstructionU, IFUError> {
     let rd = fetch_rd(instruction).ok_or(IFUError::InvalidRegister {
         index: 1,
@@ -183,7 +177,6 @@ fn fetch_instruction_u(instruction: i32) -> Result<InstructionU, IFUError> {
     Ok(InstructionU::new(rd, imm))
 }
 
-#[crate::prof::instrument("ifu::fetch_instruction_j", skip_all)]
 fn fetch_instruction_j(instruction: i32) -> Result<InstructionJ, IFUError> {
     let rd = fetch_rd(instruction).ok_or(IFUError::InvalidRegister {
         index: 1,
@@ -194,7 +187,6 @@ fn fetch_instruction_j(instruction: i32) -> Result<InstructionJ, IFUError> {
     Ok(InstructionJ::new(rd, imm))
 }
 
-#[crate::prof::instrument("ifu::fetch_instruction_fence", skip_all)]
 fn fetch_instruction_fence(instruction: i32) -> Result<InstructionFence, IFUError> {
     let rd = fetch_rd(instruction).ok_or(IFUError::InvalidRegister {
         index: 1,
@@ -216,7 +208,6 @@ fn fetch_instruction_fence(instruction: i32) -> Result<InstructionFence, IFUErro
 pub struct IFU;
 
 impl IFU {
-    #[crate::prof::instrument("IFU::fetch", skip_all)]
     pub fn fetch(&mut self, instruction: i32) -> Result<Instruction, IFUError> {
         let opcode = instruction & 0b111_1111;
 

@@ -21,7 +21,6 @@ pub struct CPU {
 }
 
 impl CPU {
-    #[crate::prof::instrument("CPU::new", skip_all)]
     pub fn new(config: CPUConfig) -> Result<Self, anyhow::Error> {
         let mmu = MMU::new(config.ram)?;
         let ifu = IFU;
@@ -33,7 +32,6 @@ impl CPU {
         })
     }
 
-    #[crate::prof::instrument("CPU::tick", skip_all)]
     pub fn tick(&mut self) -> Result<(), anyhow::Error> {
         let pc = self.registers.pc();
         let npc = pc.wrapping_add(std::mem::size_of::<i32>() as u32);
