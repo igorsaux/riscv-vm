@@ -83,7 +83,7 @@ impl MMU {
 
     #[crate::prof::instrument("MMU::read_i32", skip_all)]
     pub fn read_i32(&self, address: u32) -> Result<i32, MMUError> {
-        check_align::<i16>(address)?;
+        check_align::<i32>(address)?;
 
         if address >= self.ram.0 {
             let translated = address - self.ram.0;
