@@ -195,19 +195,19 @@ impl CPU {
                 self.registers.set(rd, result);
             }
             Instruction::XORI(InstructionI { rd, rs1, imm }) => {
-                let rs1_value = self.registers.get(rs1) as i32;
+                let rs1_value = self.registers.get(rs1);
                 let result = rs1_value ^ (imm as i32);
 
                 self.registers.set(rd, result);
             }
             Instruction::ORI(InstructionI { rd, rs1, imm }) => {
-                let rs1_value = self.registers.get(rs1) as i32;
+                let rs1_value = self.registers.get(rs1);
                 let result = rs1_value | (imm as i32);
 
                 self.registers.set(rd, result);
             }
             Instruction::ANDI(InstructionI { rd, rs1, imm }) => {
-                let rs1_value = self.registers.get(rs1) as i32;
+                let rs1_value = self.registers.get(rs1);
                 let result = rs1_value & (imm as i32);
 
                 self.registers.set(rd, result);
@@ -225,7 +225,7 @@ impl CPU {
                 self.registers.set(rd, result as i32);
             }
             Instruction::SRAI(InstructionIAlt { rd, rs1, imm }) => {
-                let rs1_value = self.registers.get(rs1) as i32;
+                let rs1_value = self.registers.get(rs1);
                 let result = rs1_value.wrapping_shr(imm as u32);
 
                 self.registers.set(rd, result);

@@ -31,9 +31,7 @@ impl RAM {
             return Err(RAMError::InvalidSize { size });
         }
 
-        let mut memory = Vec::new();
-
-        memory.resize(size as usize, 0);
+        let memory = vec![0; size as usize];
 
         Ok(Self { memory })
     }
