@@ -1,10 +1,12 @@
 use crate::{
+    csr::{CSRError, CSRMode, CSR},
     ifu::IFU,
     isa::{
-        Instruction, InstructionB, InstructionI, InstructionIAlt, InstructionJ, InstructionR,
-        InstructionS, InstructionU,
+        Instruction, InstructionB, InstructionI, InstructionIAlt, InstructionICSR,
+        InstructionICSRImm, InstructionJ, InstructionR, InstructionS, InstructionU,
     },
     mmu::{RAMConfig, MMU},
+    privilege_level::PrivilegeLevel,
     registers::Registers,
 };
 
@@ -15,21 +17,105 @@ pub struct CPUConfig {
 
 #[derive(Debug, Clone)]
 pub struct CPU {
+    pub privilege_level: PrivilegeLevel,
     pub registers: Registers,
     pub mmu: MMU,
     pub ifu: IFU,
+    pub csr: CSR,
 }
 
 impl CPU {
     pub fn new(config: CPUConfig) -> Result<Self, anyhow::Error> {
         let mmu = MMU::new(config.ram)?;
         let ifu = IFU;
+        let mut csr = CSR::new();
+
+        unsafe {
+            let mut misa = 0;
+
+            // I Extension
+            misa |= 0b1 << 8;
+            // M Extension
+            misa |= 0b1 << 12;
+            // Supervisor
+            misa |= 0b1 << 18;
+            // User
+            misa |= 0b1 << 20;
+            // Z Extension
+            misa |= 0b1 << 25;
+            // 32-bit
+            misa |= 1 << 30;
+
+            csr.set_unchecked(crate::csr::MISA, misa);
+        };
 
         Ok(Self {
+            privilege_level: PrivilegeLevel::Machine,
             registers: Registers::default(),
             mmu,
             ifu,
+            csr,
         })
+    }
+
+    fn check_csr(&self, csr: u16, mode: CSRMode) -> Result<(), CSRError> {
+        self.csr.check_bounds(csr)?;
+
+        if unsafe { self.csr.mode(csr) } < mode {
+            return Err(CSRError::IsReadOnly { address: csr });
+        }
+
+        if self.privilege_level < unsafe { self.csr.min_privilege(csr) } {
+            return Err(CSRError::MissingPrivilege { address: csr });
+        }
+
+        Ok(())
+    }
+
+    pub fn csrrw(&mut self, csr: u16, value: u32) -> Result<u32, CSRError> {
+        self.check_csr(csr, CSRMode::ReadWrite)?;
+
+        let old_value = unsafe { self.csr.get_unchecked(csr) };
+
+        unsafe { self.csr.set_unchecked(csr, value) };
+
+        Ok(old_value)
+    }
+
+    pub fn csrrs(&mut self, csr: u16, bits: u32) -> Result<u32, CSRError> {
+        let result = if bits == 0 {
+            self.check_csr(csr, CSRMode::ReadOnly)?;
+
+            unsafe { self.csr.get_unchecked(csr) }
+        } else {
+            self.check_csr(csr, CSRMode::ReadWrite)?;
+
+            let old_value = unsafe { self.csr.get_unchecked(csr) };
+
+            unsafe { self.csr.set_unchecked(csr, old_value | bits) };
+
+            old_value
+        };
+
+        Ok(result)
+    }
+
+    pub fn csrrc(&mut self, csr: u16, bits: u32) -> Result<u32, CSRError> {
+        let result = if bits == 0 {
+            self.check_csr(csr, CSRMode::ReadOnly)?;
+
+            unsafe { self.csr.get_unchecked(csr) }
+        } else {
+            self.check_csr(csr, CSRMode::ReadWrite)?;
+
+            let old_value = unsafe { self.csr.get_unchecked(csr) };
+
+            unsafe { self.csr.set_unchecked(csr, old_value & (!bits)) };
+
+            old_value
+        };
+
+        Ok(result)
     }
 
     pub fn tick(&mut self) -> Result<(), anyhow::Error> {
@@ -355,6 +441,39 @@ impl CPU {
                 let rs1 = self.registers.get(rs1) as u32;
                 let rs2 = self.registers.get(rs2) as u32;
                 let result = rs1.wrapping_rem(rs2) as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::CSRRW(InstructionICSR { rd, rs1, csr }) => {
+                let new_value = self.registers.get(rs1) as u32;
+                let result = self.csrrw(csr, new_value)? as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::CSRRS(InstructionICSR { rd, rs1, csr }) => {
+                let bits = self.registers.get(rs1) as u32;
+                let result = self.csrrs(csr, bits)? as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::CSRRC(InstructionICSR { rd, rs1, csr }) => {
+                let bits = self.registers.get(rs1) as u32;
+                let result = self.csrrc(csr, bits)? as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::CSRRWI(InstructionICSRImm { rd, imm, csr }) => {
+                let result = self.csrrw(csr, imm as u32)? as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::CSRRSI(InstructionICSRImm { rd, imm, csr }) => {
+                let result = self.csrrs(csr, imm as u32)? as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::CSRRCI(InstructionICSRImm { rd, imm, csr }) => {
+                let result = self.csrrc(csr, imm as u32)? as i32;
 
                 self.registers.set(rd, result);
             }
@@ -1029,6 +1148,112 @@ mod tests {
             cpu.tick().unwrap();
 
             assert_eq!(cpu.registers.get(crate::registers::GP), 0);
+        }
+    }
+
+    mod zicsr_extension {
+        use super::make_cpu;
+        use crate::privilege_level::PrivilegeLevel;
+        use hex_literal::hex;
+
+        #[test]
+        fn cssrw() {
+            // addi x1, x0, 0
+            // csrrw x0, 0x301, x1
+            // csrrs x2, 0x301, x0
+            let mut cpu = make_cpu(&hex!("00000093 30109073 30102173"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::SP), 0);
+        }
+
+        #[test]
+        fn csrrc() {
+            // csrrc x1, 0x301, x0
+            let mut cpu = make_cpu(&hex!("301030f3"));
+
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::RA), 0x42141100);
+
+            // lui x1, 1
+            // csrrc x0, 0xF11, x1
+            // csrrc x2, 0xF11, x0
+            let mut cpu = make_cpu(&hex!("000010b7 3010b073 30103173"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::SP), 0x42140100);
+        }
+
+        #[test]
+        fn csrrs() {
+            // addi x1, x0, 0x10
+            // csrrs x0, 0x301, x1
+            // csrrs x2, 0x301, x0
+            let mut cpu = make_cpu(&hex!("01000093 3010a073 30102173"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::SP), 0x42141110);
+        }
+
+        #[test]
+        fn csrrwi() {
+            // csrrwi x0, 0x301, 0
+            // csrrs x1, 0x301, x0
+            let mut cpu = make_cpu(&hex!("30105073 301020f3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::SP), 0);
+        }
+
+        #[test]
+        fn csrrsi_csrrci() {
+            // csrrsi x0, 0x301, 1
+            // csrrs x1, 0x301, x0
+            let mut cpu = make_cpu(&hex!("3010e073 301020f3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::RA), 0x42141101);
+
+            // csrrci x0, 0x301, 1
+            // csrrs x1, 0x301, x0
+            let mut cpu = make_cpu(&hex!("3010f073 301020f3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::RA), 0x42141100);
+        }
+
+        #[test]
+        fn missing_privilege() {
+            // csrrc x1, 0x301, x0
+            let mut cpu = make_cpu(&hex!("301030f3"));
+
+            cpu.privilege_level = PrivilegeLevel::User;
+
+            assert!(cpu.tick().is_err());
+        }
+
+        #[test]
+        fn writing_read_only() {
+            // csrrc x1, 0xF11, x0
+            let mut cpu = make_cpu(&hex!("f11030f3"));
+
+            assert!(cpu.tick().is_err());
         }
     }
 }

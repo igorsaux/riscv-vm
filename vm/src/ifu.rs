@@ -1,7 +1,8 @@
 use crate::{
     isa::{
-        Instruction, InstructionB, InstructionFence, InstructionI, InstructionIAlt, InstructionJ,
-        InstructionR, InstructionS, InstructionU,
+        Instruction, InstructionB, InstructionFence, InstructionI, InstructionIAlt,
+        InstructionICSR, InstructionICSRImm, InstructionJ, InstructionR, InstructionS,
+        InstructionU,
     },
     mmu::MMUError,
     registers::Register,
@@ -61,6 +62,10 @@ const fn fetch_rs1(instruction: i32) -> Option<Register> {
     let value = ((instruction >> 15) & 0b11111) as u8;
 
     Register::new(value)
+}
+
+const fn fetch_rs1_uimm(instruction: i32) -> u8 {
+    ((instruction >> 15) & 0b11111) as u8
 }
 
 const fn fetch_rs2(instruction: i32) -> Option<Register> {
@@ -152,10 +157,34 @@ fn fetch_instruction_i_alt(instruction: i32) -> Result<InstructionIAlt, IFUError
         index: 2,
         instruction,
     })?;
-
     let shamt = ((instruction >> 20) & 0b11111) as u8;
 
     Ok(InstructionIAlt::new(rd, rs1, shamt))
+}
+
+fn fetch_instruction_i_csr(instruction: i32) -> Result<InstructionICSR, IFUError> {
+    let rd = fetch_rd(instruction).ok_or(IFUError::InvalidRegister {
+        index: 1,
+        instruction,
+    })?;
+    let rs1 = fetch_rs1(instruction).ok_or(IFUError::InvalidRegister {
+        index: 2,
+        instruction,
+    })?;
+    let csr = fetch_imm_i(instruction) as u16;
+
+    Ok(InstructionICSR::new(rd, rs1, csr))
+}
+
+fn fetch_instruction_i_csr_imm(instruction: i32) -> Result<InstructionICSRImm, IFUError> {
+    let rd = fetch_rd(instruction).ok_or(IFUError::InvalidRegister {
+        index: 1,
+        instruction,
+    })?;
+    let imm = fetch_rs1_uimm(instruction);
+    let csr = fetch_imm_i(instruction) as u16;
+
+    Ok(InstructionICSRImm::new(rd, imm, csr))
 }
 
 fn fetch_instruction_s(instruction: i32) -> Result<InstructionS, IFUError> {
@@ -333,10 +362,23 @@ impl IFU {
             0b0001111 => Ok(Instruction::FENCE(fetch_instruction_fence(instruction)?)),
             0b1110011 => {
                 let imm = fetch_imm_i(instruction);
+                let funct3 = fetch_funct3(instruction);
 
-                match imm {
-                    0b000000000000 => Ok(Instruction::ECALL),
-                    0b000000000001 => Ok(Instruction::EBREAK),
+                match (imm, funct3) {
+                    (0b000000000000, 0b000) => Ok(Instruction::ECALL),
+                    (0b000000000001, 0b000) => Ok(Instruction::EBREAK),
+                    (_, 0b001) => Ok(Instruction::CSRRW(fetch_instruction_i_csr(instruction)?)),
+                    (_, 0b010) => Ok(Instruction::CSRRS(fetch_instruction_i_csr(instruction)?)),
+                    (_, 0b011) => Ok(Instruction::CSRRC(fetch_instruction_i_csr(instruction)?)),
+                    (_, 0b101) => Ok(Instruction::CSRRWI(fetch_instruction_i_csr_imm(
+                        instruction,
+                    )?)),
+                    (_, 0b110) => Ok(Instruction::CSRRSI(fetch_instruction_i_csr_imm(
+                        instruction,
+                    )?)),
+                    (_, 0b111) => Ok(Instruction::CSRRCI(fetch_instruction_i_csr_imm(
+                        instruction,
+                    )?)),
                     _ => Err(IFUError::UnknownInstruction { instruction }),
                 }
             }

@@ -40,6 +40,32 @@ impl InstructionIAlt {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InstructionICSR {
+    pub rd: Register,
+    pub rs1: Register,
+    pub csr: u16,
+}
+
+impl InstructionICSR {
+    pub fn new(rd: Register, rs1: Register, csr: u16) -> Self {
+        Self { rd, rs1, csr }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InstructionICSRImm {
+    pub rd: Register,
+    pub imm: u8,
+    pub csr: u16,
+}
+
+impl InstructionICSRImm {
+    pub fn new(rd: Register, imm: u8, csr: u16) -> Self {
+        Self { rd, imm, csr }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InstructionS {
     pub rs1: Register,
     pub rs2: Register,
@@ -162,4 +188,12 @@ pub enum Instruction {
     DIVU(InstructionR),
     REM(InstructionR),
     REMU(InstructionR),
+
+    // Zicsr Extension
+    CSRRW(InstructionICSR),
+    CSRRS(InstructionICSR),
+    CSRRC(InstructionICSR),
+    CSRRWI(InstructionICSRImm),
+    CSRRSI(InstructionICSRImm),
+    CSRRCI(InstructionICSRImm),
 }
