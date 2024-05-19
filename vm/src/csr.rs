@@ -1,6 +1,12 @@
 use crate::{debug_unreachable, privilege_level::PrivilegeLevel};
 use thiserror::Error;
 
+/// Vendor ID
+pub const MVENDORID: u16 = 0xF11;
+/// Architecture ID
+pub const MARCHID: u16 = 0xF12;
+/// Implementation ID
+pub const MIMPID: u16 = 0xF13;
 /// ISA and extensions
 pub const MISA: u16 = 0x301;
 

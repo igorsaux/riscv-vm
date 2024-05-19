@@ -10,8 +10,16 @@ use crate::{
     registers::Registers,
 };
 
+#[derive(Debug, Default, Clone)]
+pub struct MachineInfo {
+    pub vendor_id: u32,
+    pub arch_id: u32,
+    pub impl_id: u32,
+}
+
 #[derive(Debug, Clone)]
 pub struct CPUConfig {
+    pub machine_info: MachineInfo,
     pub ram: RAMConfig,
 }
 
@@ -47,6 +55,12 @@ impl CPU {
             misa |= 1 << 30;
 
             csr.set_unchecked(crate::csr::MISA, misa);
+
+            let minfo = config.machine_info;
+
+            csr.set_unchecked(crate::csr::MVENDORID, minfo.vendor_id);
+            csr.set_unchecked(crate::csr::MARCHID, minfo.arch_id);
+            csr.set_unchecked(crate::csr::MIMPID, minfo.impl_id);
         };
 
         Ok(Self {
@@ -488,12 +502,13 @@ impl CPU {
 #[cfg(test)]
 mod tests {
     use super::{CPUConfig, CPU};
-    use crate::mmu::RAMConfig;
+    use crate::{cpu::MachineInfo, mmu::RAMConfig};
 
     fn make_cpu(program: &[u8]) -> CPU {
         assert!(program.len() % std::mem::size_of::<i32>() == 0);
 
         let mut cpu = CPU::new(CPUConfig {
+            machine_info: MachineInfo::default(),
             ram: RAMConfig {
                 start_address: 0,
                 size: program.len() as u32,
