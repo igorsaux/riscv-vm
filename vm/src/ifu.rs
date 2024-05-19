@@ -18,6 +18,31 @@ pub enum IFUError {
     InvalidRegister { index: u8, instruction: i32 },
 }
 
+const fn cut_move(value: i32, len: usize, pos: usize, target_pos: usize) -> i32 {
+    let xlen = std::mem::size_of::<i32>() * 8;
+    let mut result;
+
+    let sl = xlen - len - pos;
+
+    if sl > 0 {
+        result = value << sl;
+    } else {
+        result = value;
+    }
+
+    let sr = xlen - len;
+
+    if sr > 0 {
+        result >>= sr;
+    }
+
+    if target_pos > 0 {
+        result <<= target_pos;
+    }
+
+    result
+}
+
 const fn fetch_funct3(instruction: i32) -> i32 {
     (instruction >> 12) & 0b111
 }
@@ -45,50 +70,44 @@ const fn fetch_rs2(instruction: i32) -> Option<Register> {
 }
 
 const fn fetch_imm_i(instruction: i32) -> i16 {
-    (instruction >> 20) as i16
+    cut_move(instruction, 12, 20, 0) as i16
 }
 
 const fn fetch_imm_s(instruction: i32) -> i16 {
-    let mut result;
-
     // [4:0]
-    result = (instruction >> 7) & 0b11111;
+    let mut result = cut_move(instruction, 5, 7, 0);
     // [11:5]
-    result |= instruction >> 25;
+    result |= cut_move(instruction, 7, 25, 5);
 
     result as i16
 }
 
 const fn fetch_imm_b(instruction: i32) -> i16 {
-    let mut result;
-
     // [4:1]
-    result = (instruction >> 7) & 0b11110;
+    let mut result = cut_move(instruction, 4, 8, 1);
     // [10:5]
-    result |= (instruction >> 25) & 0b111111;
+    result |= cut_move(instruction, 6, 25, 5);
     // [11]
-    result |= (instruction >> 7) & 0b1;
+    result |= cut_move(instruction, 1, 7, 11);
     // [12]
-    result |= instruction >> 30;
+    result |= cut_move(instruction, 1, 31, 12);
 
     result as i16
 }
 
 const fn fetch_imm_u(instruction: i32) -> i32 {
-    instruction >> 12
+    cut_move(instruction, 20, 12, 12)
 }
 
 const fn fetch_imm_j(instruction: i32) -> i32 {
-    let mut result;
-
     // [10:1]
-    result = (instruction >> 21) << 1;
+    let mut result = cut_move(instruction, 10, 21, 1);
     // [11]
-    result |= (instruction >> 20) & 0b1;
+    result |= cut_move(instruction, 1, 20, 11);
     // [19:12]
-    result |= (instruction >> 12) & 0b1111_1111;
+    result |= cut_move(instruction, 8, 12, 12);
     // [20]
-    result |= (instruction >> 21) & 0b1;
+    result |= cut_move(instruction, 1, 30, 20);
 
     result
 }
@@ -296,6 +315,18 @@ impl IFU {
                     (0b0100000, 0b101) => Ok(Instruction::SRA(fetch_instruction_r(instruction)?)),
                     (0b0000000, 0b110) => Ok(Instruction::OR(fetch_instruction_r(instruction)?)),
                     (0b0000000, 0b111) => Ok(Instruction::AND(fetch_instruction_r(instruction)?)),
+                    // M Extension
+                    (0b0000001, 0b000) => Ok(Instruction::MUL(fetch_instruction_r(instruction)?)),
+                    (0b0000001, 0b001) => Ok(Instruction::MULH(fetch_instruction_r(instruction)?)),
+                    (0b0000001, 0b010) => {
+                        Ok(Instruction::MULHSU(fetch_instruction_r(instruction)?))
+                    }
+                    (0b0000001, 0b011) => Ok(Instruction::MULHU(fetch_instruction_r(instruction)?)),
+                    (0b0000001, 0b100) => Ok(Instruction::DIV(fetch_instruction_r(instruction)?)),
+                    (0b0000001, 0b101) => Ok(Instruction::DIVU(fetch_instruction_r(instruction)?)),
+                    (0b0000001, 0b110) => Ok(Instruction::REM(fetch_instruction_r(instruction)?)),
+                    (0b0000001, 0b111) => Ok(Instruction::REMU(fetch_instruction_r(instruction)?)),
+                    // None
                     _ => Err(IFUError::UnknownInstruction { instruction }),
                 }
             }
@@ -355,11 +386,11 @@ mod tests {
         let mut ifu = IFU;
 
         assert_eq!(
-            ifu.fetch(0x00a00fa3),
-            Ok(Instruction::SB(InstructionS::new(
-                crate::registers::ZERO,
-                crate::registers::A0,
-                31
+            ifu.fetch(0xfef42623 as u32 as i32),
+            Ok(Instruction::SW(InstructionS::new(
+                crate::registers::S0,
+                crate::registers::A5,
+                -20
             )))
         );
     }
@@ -386,7 +417,7 @@ mod tests {
             ifu.fetch(0x000320b7),
             Ok(Instruction::LUI(InstructionU::new(
                 crate::registers::RA,
-                50
+                204800
             )))
         );
     }

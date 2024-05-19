@@ -152,4 +152,14 @@ pub enum Instruction {
     FENCE(InstructionFence),
     ECALL,
     EBREAK,
+
+    // M Extension
+    MUL(InstructionR),
+    MULH(InstructionR),
+    MULHSU(InstructionR),
+    MULHU(InstructionR),
+    DIV(InstructionR),
+    DIVU(InstructionR),
+    REM(InstructionR),
+    REMU(InstructionR),
 }

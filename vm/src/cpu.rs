@@ -41,10 +41,10 @@ impl CPU {
 
         match instruction {
             Instruction::LUI(InstructionU { rd, imm }) => {
-                self.registers.set(rd, imm << 12);
+                self.registers.set(rd, imm);
             }
             Instruction::AUIPC(InstructionU { rd, imm }) => {
-                let result = pc.wrapping_add_signed(imm << 12) as i32;
+                let result = pc.wrapping_add_signed(imm) as i32;
 
                 self.registers.set(rd, result);
             }
@@ -55,7 +55,7 @@ impl CPU {
                 return Ok(());
             }
             Instruction::JALR(InstructionI { rd, rs1, imm }) => {
-                let result = self.registers.get(rs1).wrapping_add(imm as i32) & !0b1;
+                let result = self.registers.get(rs1).wrapping_add(imm as i32);
 
                 self.registers.set(rd, npc as i32);
                 *self.registers.pc_mut() = pc.wrapping_add_signed(result);
@@ -301,6 +301,63 @@ impl CPU {
             Instruction::FENCE(_) => {}
             Instruction::ECALL => {}
             Instruction::EBREAK => {}
+            // M Extension
+            Instruction::MUL(InstructionR { rd, rs1, rs2 }) => {
+                let rs1 = self.registers.get(rs1) as i64;
+                let rs2 = self.registers.get(rs2) as i64;
+                let result = rs1.wrapping_mul(rs2) as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::MULH(InstructionR { rd, rs1, rs2 }) => {
+                let rs1 = self.registers.get(rs1) as i64;
+                let rs2 = self.registers.get(rs2) as i64;
+                let result = (rs1.wrapping_mul(rs2) >> 32) as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::MULHSU(InstructionR { rd, rs1, rs2 }) => {
+                let rs1 = self.registers.get(rs1) as i64;
+                let rs2 = self.registers.get(rs2) as u32 as u64;
+                let result = (rs1.wrapping_mul(rs2 as i64) >> 32) as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::MULHU(InstructionR { rd, rs1, rs2 }) => {
+                let rs1 = self.registers.get(rs1) as u32 as u64;
+                let rs2 = self.registers.get(rs2) as u32 as u64;
+                let result = (rs1.wrapping_mul(rs2) >> 32) as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::DIV(InstructionR { rd, rs1, rs2 }) => {
+                let rs1 = self.registers.get(rs1);
+                let rs2 = self.registers.get(rs2);
+                let result = rs1.wrapping_div(rs2);
+
+                self.registers.set(rd, result);
+            }
+            Instruction::DIVU(InstructionR { rd, rs1, rs2 }) => {
+                let rs1 = self.registers.get(rs1) as u32;
+                let rs2 = self.registers.get(rs2) as u32;
+                let result = rs1.wrapping_div(rs2) as i32;
+
+                self.registers.set(rd, result);
+            }
+            Instruction::REM(InstructionR { rd, rs1, rs2 }) => {
+                let rs1 = self.registers.get(rs1);
+                let rs2 = self.registers.get(rs2);
+                let result = rs1.wrapping_rem(rs2);
+
+                self.registers.set(rd, result);
+            }
+            Instruction::REMU(InstructionR { rd, rs1, rs2 }) => {
+                let rs1 = self.registers.get(rs1) as u32;
+                let rs2 = self.registers.get(rs2) as u32;
+                let result = rs1.wrapping_rem(rs2) as i32;
+
+                self.registers.set(rd, result);
+            }
         }
 
         *self.registers.pc_mut() = npc;
@@ -806,6 +863,172 @@ mod tests {
             cpu.tick().unwrap();
 
             assert_eq!(cpu.registers.get(crate::registers::GP), 1);
+        }
+    }
+
+    mod m_extension {
+        use crate::cpu::tests::make_cpu;
+        use hex_literal::hex;
+
+        #[test]
+        fn mul() {
+            // lui x1, 0x8
+            // li x2, 256
+            // mul x3, x1, x2
+            let mut cpu = make_cpu(&hex!("000080b7 10000113 022081b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::GP), 8388608);
+
+            // li x1, -1
+            // li x2, -1
+            // mul x3, x1, x2
+            let mut cpu = make_cpu(&hex!("fff00093 fff00113 022081b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::GP), 1);
+        }
+
+        #[test]
+        fn mulh() {
+            // li x1, 32768
+            // slli x1, x1, 16
+            // li x2, 2
+            // mulh x3, x1, x2
+            let mut cpu = make_cpu(&hex!("000080b7 01009093 00200113 022091b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::GP), -1);
+        }
+
+        #[test]
+        fn mulhsu() {
+            // li x1, -3
+            // li x2, 2
+            // mulhsu x3, x1, x2
+            let mut cpu = make_cpu(&hex!("ffd00093 00200113 0220a1b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::RA), -3);
+            assert_eq!(cpu.registers.get(crate::registers::GP), -1);
+        }
+
+        #[test]
+        fn mulhu() {
+            // li x1, -3
+            // li x2, 2
+            // mulhu x3, x1, x2
+            let mut cpu = make_cpu(&hex!("ffd00093 00200113 0220b1b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::RA), -3);
+            assert_eq!(cpu.registers.get(crate::registers::SP), 2);
+            assert_eq!(cpu.registers.get(crate::registers::GP), 1);
+        }
+
+        #[test]
+        fn div() {
+            // li x1, 3
+            // li x2, 2
+            // div x3, x1, x2
+            let mut cpu = make_cpu(&hex!("00300093 00200113 0220c1b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::GP), 1);
+
+            //li x1, 3
+            //li x2, -2
+            //div x4, x1, x2
+            let mut cpu = make_cpu(&hex!("00300093 ffe00113 0220c233"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::TP), -1);
+        }
+
+        #[test]
+        fn divu() {
+            // li x1, 3
+            // li x2, -2
+            // divu x3, x1, x2
+            let mut cpu = make_cpu(&hex!("00300093 ffe00113 0220d1b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::GP), 0);
+        }
+
+        #[test]
+        fn rem() {
+            // li x1, 3
+            // li x2, -2
+            // rem x3, x1, x2
+            let mut cpu = make_cpu(&hex!("00300093 ffe00113 0220e1b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::GP), 1);
+
+            // li x1, 4
+            // li x2, 2
+            // rem x3, x1, x2
+            let mut cpu = make_cpu(&hex!("00400093 00200113 0220e233"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::TP), 0);
+        }
+
+        #[test]
+        fn remu() {
+            // li x1, 3
+            // li x2, -2
+            // remu x3, x1, x2
+            let mut cpu = make_cpu(&hex!("00300093 ffe00113 0220f1b3"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::GP), 3);
+
+            // li x1, -4
+            // li x2, 2
+            // remu x4, x1, x2
+            let mut cpu = make_cpu(&hex!("ffc00093 00200113 0220f233"));
+
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+            cpu.tick().unwrap();
+
+            assert_eq!(cpu.registers.get(crate::registers::GP), 0);
         }
     }
 }
