@@ -4,7 +4,7 @@ use anyhow::Context;
 use clap::Parser;
 use object::{Architecture, Object, ObjectSection};
 use vm::{
-    cpu::{CPUConfig, CPU},
+    cpu::{CPUConfig, MachineInfo, CPU},
     mmu::RAMConfig,
 };
 
@@ -47,6 +47,7 @@ fn main() -> Result<(), anyhow::Error> {
     let code_size = machine_code.data.len() as u32;
 
     let mut vm = vm::VM::new(CPU::new(CPUConfig {
+        machine_info: MachineInfo::default(),
         ram: RAMConfig {
             start_address: 0,
             size: machine_code.data.len() as u32,
